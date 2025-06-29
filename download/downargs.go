@@ -2,7 +2,9 @@ package download
 
 import (
 	"bufio"
+	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/gammazero/deque"
 )
@@ -10,9 +12,12 @@ import (
 var Args DownArgs
 
 type DownArgs struct {
-	saveDir string
-	verbose bool
-	urls    *deque.Deque[string]
+	saveDir     string
+	savePic     bool
+	noSaveVideo bool
+	verbose     bool
+	veryVerbose bool
+	urls        *deque.Deque[string]
 }
 
 func (args *DownArgs) Init() {
@@ -41,11 +46,29 @@ func (args *DownArgs) SetSaveDir(saveDir string) {
 func (args *DownArgs) GetSaveDir() string {
 	return args.saveDir
 }
+func (args *DownArgs) SetSavePic(savePic bool) {
+	args.savePic = savePic
+}
+func (args *DownArgs) GetSavePic() bool {
+	return args.savePic
+}
+func (args *DownArgs) SetNoSaveVideo(noSaveVideo bool) {
+	args.noSaveVideo = noSaveVideo
+}
+func (args *DownArgs) GetNoSaveVideo() bool {
+	return args.noSaveVideo
+}
 func (args *DownArgs) SetVerbose(verbose bool) {
 	args.verbose = verbose
 }
 func (args *DownArgs) GetVerbose() bool {
 	return args.verbose
+}
+func (args *DownArgs) SetVeryVerbose(veryVerbose bool) {
+	args.veryVerbose = veryVerbose
+}
+func (args *DownArgs) GetVeryVerbose() bool {
+	return args.veryVerbose
 }
 func (args *DownArgs) PushUrlBack(url string) {
 	args.urls.PushBack(url)
@@ -75,4 +98,46 @@ type VideoInfo struct {
 	picUrl   string
 	vedioUrl string
 	size     int64
+}
+
+func (videoInfo *VideoInfo) SetTitle(title string) {
+	illegalChars := `\/:*?"<>|`
+	if strings.ContainsAny(title, illegalChars) {
+		slog.Info("标题出现特殊字符，现将标题的特殊字符进行剔除，否则无法保存")
+		videoInfo.title = strings.NewReplacer(`/`, "", `\`, "", `:`, "", `*`, "", `?`, "", `"`, "", `<`, "", `>`, "", `|`, "").
+			Replace(title)
+	}
+}
+func (videoInfo *VideoInfo) GetTitle() string {
+	return videoInfo.title
+}
+func (videoInfo *VideoInfo) SetBvid(bvid string) {
+	videoInfo.bvid = bvid
+}
+func (videoInfo *VideoInfo) GetBvid() string {
+	return videoInfo.bvid
+}
+func (videoInfo *VideoInfo) SetCid(cid string) {
+	videoInfo.cid = cid
+}
+func (videoInfo *VideoInfo) GetCid() string {
+	return videoInfo.cid
+}
+func (videoInfo *VideoInfo) SetPicUrl(picUrl string) {
+	videoInfo.picUrl = picUrl
+}
+func (videoInfo *VideoInfo) GetPicUrl() string {
+	return videoInfo.picUrl
+}
+func (videoInfo *VideoInfo) SetVedioUrl(vedioUrl string) {
+	videoInfo.vedioUrl = vedioUrl
+}
+func (videoInfo *VideoInfo) GetVedioUrl() string {
+	return videoInfo.vedioUrl
+}
+func (videoInfo *VideoInfo) SetSize(size int64) {
+	videoInfo.size = size
+}
+func (videoInfo *VideoInfo) GetSize() int64 {
+	return videoInfo.size
 }

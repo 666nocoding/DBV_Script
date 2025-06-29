@@ -42,13 +42,13 @@ func (down *downloader) senderGetRaw(url string) (io.ReadCloser, error) {
 }
 func (down *downloader) getVideoInfoApi() string {
 	return fmt.Sprintf("https://api.bilibili.com/x/web-interface/view?bvid=%s",
-		down.videoInfo.bvid,
+		down.videoInfo.GetBvid(),
 	)
 }
 func (down *downloader) getVideoUrlApi() string {
 	return fmt.Sprintf(
 		"https://api.bilibili.com/x/player/wbi/playurl?bvid=%s&cid=%s&qn=1&platform=html5&high_quality=1",
-		down.videoInfo.bvid, down.videoInfo.cid,
+		down.videoInfo.GetBvid(), down.videoInfo.cid,
 	)
 }
 func (down *downloader) getBvid() error {
@@ -66,11 +66,11 @@ func (down *downloader) getBvid() error {
 		}
 		url = string(data)
 	}
-	down.videoInfo.bvid = regexp.MustCompile(`BV[0-9A-Za-z]{10}`).FindString(url)
-	if len(down.videoInfo.bvid) == 0 {
+	down.videoInfo.SetBvid(regexp.MustCompile(`BV[0-9A-Za-z]{10}`).FindString(url))
+	if len(down.videoInfo.GetBvid()) == 0 {
 		return fmt.Errorf("无法从 %s 解析出 bvid", *down.url)
 	}
-	slog.Debug(fmt.Sprintf("解析出来的 bv 号是 %s", down.videoInfo.bvid))
+	slog.Debug(fmt.Sprintf("解析出来的 bv 号是 %s", down.videoInfo.GetBvid()))
 	return nil
 }
 func (down *downloader) getVideoInfo() error {
@@ -80,16 +80,14 @@ func (down *downloader) getVideoInfo() error {
 	}
 	dataJson := gjson.ParseBytes(data)
 	if dataJson.Get("code").String() == "0" {
-		down.videoInfo.cid = dataJson.Get("data.cid").String()
-		down.videoInfo.title = dataJson.Get("data.title").String()
-		down.videoInfo.picUrl = dataJson.Get("data.pic").String()
-		slog.Debug(fmt.Sprintf("解析出来的 cid 号是 %s", down.videoInfo.cid))
-		slog.Debug(fmt.Sprintf("解析出来的标题是 %s", down.videoInfo.title))
-		slog.Debug("注意：由于文件名不能出现特殊字符，所以文件名可能与标题不完全一致")
-		down.videoInfo.title = strings.ReplaceAll(down.videoInfo.title, `\`, "")
-		slog.Debug(fmt.Sprintf("解析出来的封面下载链接是 %s", down.videoInfo.picUrl))
+		down.videoInfo.SetCid(dataJson.Get("data.cid").String())
+		down.videoInfo.SetTitle(dataJson.Get("data.title").String())
+		down.videoInfo.SetPicUrl(dataJson.Get("data.pic").String())
+		slog.Debug(fmt.Sprintf("解析出来的 cid 号是 %s", down.videoInfo.GetCid()))
+		slog.Debug(fmt.Sprintf("解析出来的标题是 %s", down.videoInfo.GetTitle()))
+		slog.Debug(fmt.Sprintf("解析出来的封面下载链接是 %s", down.videoInfo.GetPicUrl()))
 	} else {
-		return fmt.Errorf("无法从 %s 解析出 cid", down.videoInfo.bvid)
+		return fmt.Errorf("无法从 %s 解析出 cid", down.videoInfo.GetBvid())
 	}
 	data, err = down.sender(down.getVideoUrlApi())
 	if err != nil {
@@ -97,31 +95,52 @@ func (down *downloader) getVideoInfo() error {
 	}
 	dataJson = gjson.ParseBytes(data)
 	if dataJson.Get("code").String() == "0" && dataJson.Get("data.durl.0.url").Exists() {
-		down.videoInfo.vedioUrl = dataJson.Get("data.durl.0.url").String()
-		slog.Debug("解析出来的视频下载链接是" + down.videoInfo.vedioUrl)
-		down.videoInfo.size = dataJson.Get("data.durl.0.size").Int()
-		slog.Debug(fmt.Sprintf("解析出来的视频大小是 %.2f MB", float64(down.videoInfo.size)/1048576))
+		down.videoInfo.SetVedioUrl(dataJson.Get("data.durl.0.url").String())
+		slog.Debug("解析出来的视频下载链接是" + down.videoInfo.GetVedioUrl())
+		down.videoInfo.SetSize(dataJson.Get("data.durl.0.size").Int())
+		slog.Debug(fmt.Sprintf("解析出来的视频大小是 %.2f MB", float64(down.videoInfo.GetSize())/1048576))
 	} else {
-		return fmt.Errorf("无法从 %s 解析出视频下载链接", down.videoInfo.bvid)
+		return fmt.Errorf("无法从 %s 解析出视频下载链接", down.videoInfo.GetBvid())
 	}
 	return nil
 }
 func (down *downloader) downloadVedio() error {
-	reader, err := down.senderGetRaw(down.videoInfo.vedioUrl)
-	if err != nil {
-		return err
+	if !Args.GetNoSaveVideo() {
+		reader, err := down.senderGetRaw(down.videoInfo.GetVedioUrl())
+		if err != nil {
+			return err
+		}
+		vedio, err := os.OpenFile(fmt.Sprintf("%s%s.mp4", Args.saveDir, down.videoInfo.GetTitle()), os.O_RDWR|os.O_CREATE, 0666)
+		if err != nil {
+			return err
+		}
+		bar := progressbar.DefaultBytes(
+			down.videoInfo.GetSize(),
+			"downloading",
+		)
+		_, err = io.Copy(io.MultiWriter(vedio, bar), reader)
+		if err != nil {
+			return err
+		}
 	}
-	vedio, err := os.OpenFile(fmt.Sprintf("%s%s.mp4", Args.saveDir, down.videoInfo.title), os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		return err
-	}
-	bar := progressbar.DefaultBytes(
-		down.videoInfo.size,
-		"downloading",
-	)
-	_, err = io.Copy(io.MultiWriter(vedio, bar), reader)
-	if err != nil {
-		return err
+	return nil
+}
+
+func (down *downloader) downloadPic() error {
+	if Args.GetSavePic() {
+		reader, err := down.senderGetRaw(down.videoInfo.GetPicUrl())
+		if err != nil {
+			return err
+		}
+		pic, err := os.OpenFile(fmt.Sprintf("%s%s.png", Args.saveDir, down.videoInfo.GetTitle()), os.O_RDWR|os.O_CREATE, 0666)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(pic, reader)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 	return nil
 }
@@ -163,5 +182,6 @@ func Download(url string) error {
 	checkErr(down.getBvid)
 	checkErr(down.getVideoInfo)
 	checkErr(down.downloadVedio)
+	checkErr(down.downloadPic)
 	return err
 }

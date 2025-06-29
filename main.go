@@ -18,4 +18,5 @@ func main() {
 		}
 		download.Args.PopUrlsFront()
 	}
+	slog.Info("全部下载完成")
 }
