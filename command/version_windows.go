@@ -2,4 +2,4 @@
 
 package command
 
-var version string = "dbv-windows-x86-64-v0.2.1"
+var version string = "dbv-windows-x86-64-v0.2.2"

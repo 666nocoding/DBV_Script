@@ -106,6 +106,8 @@ func (videoInfo *VideoInfo) SetTitle(title string) {
 		slog.Info("标题出现特殊字符，现将标题的特殊字符进行剔除，否则无法保存")
 		videoInfo.title = strings.NewReplacer(`/`, "", `\`, "", `:`, "", `*`, "", `?`, "", `"`, "", `<`, "", `>`, "", `|`, "").
 			Replace(title)
+	} else {
+		videoInfo.title = title
 	}
 }
 func (videoInfo *VideoInfo) GetTitle() string {
