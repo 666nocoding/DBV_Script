@@ -101,8 +101,7 @@ type VideoInfo struct {
 }
 
 func (videoInfo *VideoInfo) SetTitle(title string) {
-	illegalChars := `\/:*?"<>|`
-	if strings.ContainsAny(title, illegalChars) {
+	if strings.ContainsAny(title, `\/:*?"<>|`) {
 		slog.Info("标题出现特殊字符，现将标题的特殊字符进行剔除，否则无法保存")
 		videoInfo.title = strings.NewReplacer(`/`, "", `\`, "", `:`, "", `*`, "", `?`, "", `"`, "", `<`, "", `>`, "", `|`, "").
 			Replace(title)

@@ -47,8 +47,8 @@ func (down *downloader) getVideoInfoApi() string {
 }
 func (down *downloader) getVideoUrlApi() string {
 	return fmt.Sprintf(
-		"https://api.bilibili.com/x/player/wbi/playurl?bvid=%s&cid=%s&qn=1&platform=html5&high_quality=1",
-		down.videoInfo.GetBvid(), down.videoInfo.cid,
+		"https://api.bilibili.com/x/player/wbi/playurl?bvid=%s&cid=%s&fnval=80",
+		down.videoInfo.GetBvid(), down.videoInfo.GetCid(),
 	)
 }
 func (down *downloader) getBvid() error {
@@ -94,6 +94,16 @@ func (down *downloader) getVideoInfo() error {
 		return err
 	}
 	dataJson = gjson.ParseBytes(data)
+	if Args.GetVeryVerbose() {
+		jsonFile, err := os.OpenFile(fmt.Sprintf("%s%s.json", Args.saveDir, down.videoInfo.GetTitle()), os.O_RDWR|os.O_CREATE, 0666)
+		if err != nil {
+			return err
+		}
+		_, err = jsonFile.Write(data)
+		if err != nil {
+			return err
+		}
+	}
 	if dataJson.Get("code").String() == "0" && dataJson.Get("data.durl.0.url").Exists() {
 		down.videoInfo.SetVedioUrl(dataJson.Get("data.durl.0.url").String())
 		slog.Debug("解析出来的视频下载链接是" + down.videoInfo.GetVedioUrl())
@@ -122,6 +132,7 @@ func (down *downloader) downloadVedio() error {
 		if err != nil {
 			return err
 		}
+		slog.Info(fmt.Sprintf("%s 视频下载完成", down.videoInfo.GetTitle()))
 	}
 	return nil
 }
@@ -140,7 +151,7 @@ func (down *downloader) downloadPic() error {
 		if err != nil {
 			return err
 		}
-		return nil
+		slog.Info(fmt.Sprintf("%s 封面下载完成", down.videoInfo.GetTitle()))
 	}
 	return nil
 }

@@ -1,7 +1,7 @@
 package command
 
 import (
-	"DBV_Script/download"
+	"DBV_Script/v0.2/download"
 	"context"
 	"errors"
 	"log/slog"
@@ -14,7 +14,7 @@ var helpMessage string = `
 {{- "介绍:" }}
     {{ .Description }}
 {{ "使用方式:" }}
-    {{ .Name }} [选项]
+    {{ .Name }} [选项] <链接>
 {{ "当前版本:" }}
     {{ .Version }}
 {{ "选项:" }}
@@ -24,7 +24,7 @@ var helpMessage string = `
 `
 var parser cli.Command = cli.Command{
 	Name:        "dbv.exe",
-	Description: "下载哔哩哔哩视频的命令行工具（菜鸟写的小玩具）",
+	Description: "下载哔哩哔哩视频的命令行工具",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:    "file",
@@ -105,9 +105,10 @@ func Parser() error {
 	if err == nil {
 		if download.Args.GetVerbose() {
 			slog.SetLogLoggerLevel(slog.LevelInfo)
-		}
-		if download.Args.GetVeryVerbose() {
+		} else if download.Args.GetVeryVerbose() {
 			slog.SetLogLoggerLevel(slog.LevelDebug)
+		} else {
+			slog.SetLogLoggerLevel(slog.LevelWarn)
 		}
 	}
 	return err
