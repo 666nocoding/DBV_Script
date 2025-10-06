@@ -35,10 +35,10 @@ $ dbv -h
 
 ```shell
 git clone --depth 1 http://docker.mydns.com:54671/Winter/DBV_Script.git
-cd DBV_Script.git
+cd DBV_Script
 go mod tidy
 # go env -w GOOS=linux
-go build -o ./dbv-linux-x86-64-v0.3.0.o main.go
+go build -o ./dbv main.go
 # go env -w GOOS=windows
-# go build -o ./dbv-windows-x86-64-v0.3.0.exe main.go
+# go build -o ./dbv main.go
 ```
