@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const version string = "dbv-v0.3.5"
+const version string = "dbv-v0.3.6"
 
 const helpMessage string = `
 {{- "介绍:" }}

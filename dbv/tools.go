@@ -53,12 +53,15 @@ func WriteRawDataToFile(path string, data []byte) (err error) {
 }
 
 var progress *mpb.Progress
+var onceCreateProgress sync.Once
 
 func createProgress() {
-	if progress == nil {
-		option := mpb.WithWidth(64)
-		progress = mpb.New(option)
-	}
+	onceCreateProgress.Do(func() {
+		if progress == nil {
+			option := mpb.WithWidth(64)
+			progress = mpb.New(option)
+		}
+	})
 }
 func AddBarToWriteDataToFileFromIO(path string, reader io.Reader, size int64, title string) error {
 	createProgress()
@@ -78,7 +81,7 @@ func AddBarToWriteDataToFileFromIO(path string, reader io.Reader, size int64, ti
 	return WriteDataToFileFromIO(path, proxyreader)
 }
 func WaitBarFinish() {
-	createProgress()
+	onceCreateProgress.Do(createProgress)
 	progress.Wait()
 }
 func WriteDataToFileFromIO(path string, reader io.Reader) (err error) {
@@ -103,14 +106,17 @@ func WriteFileFromUrl(path, url string) error {
 }
 
 var client *resty.Client
+var onceCreateClient sync.Once
 
 func createClient() {
-	if client == nil {
-		client = resty.New()
-		client.SetHeader("Referer", "https://www.bilibili.com/")
-		client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0")
-		client.SetHeader("Accept-Encoding", "gzip, deflate, br, zstd")
-	}
+	onceCreateClient.Do(func() {
+		if client == nil {
+			client = resty.New()
+			client.SetHeader("Referer", "https://www.bilibili.com/")
+			client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0")
+			client.SetHeader("Accept-Encoding", "gzip, deflate, br, zstd")
+		}
+	})
 }
 func setClientDebug(b bool) {
 	createClient()
