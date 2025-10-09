@@ -78,6 +78,7 @@ func AddBarToWriteDataToFileFromIO(path string, reader io.Reader, size int64, ti
 	return WriteDataToFileFromIO(path, proxyreader)
 }
 func WaitBarFinish() {
+	createProgress()
 	progress.Wait()
 }
 func WriteDataToFileFromIO(path string, reader io.Reader) (err error) {
