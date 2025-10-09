@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const version string = "dbv-v0.3.6"
+const version string = "dbv-v0.3.7"
 
 const helpMessage string = `
 {{- "介绍:" }}
@@ -66,7 +66,7 @@ var parser cli.Command = cli.Command{
 		&cli.BoolFlag{
 			Name:    "nobar",
 			Aliases: []string{"nb"},
-			Value:   true,
+			Value:   false,
 			Usage:   "是否打开下载进度条（默认打开）",
 		},
 		&cli.IntFlag{
