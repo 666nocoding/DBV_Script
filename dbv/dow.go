@@ -2,9 +2,7 @@ package dbv
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -35,6 +33,9 @@ func newDownloader(p *mpb.Progress) *downloader {
 		progress: p,
 	}
 }
+
+// 从 url 获取 bvid, 如果不是为了解析
+// b23.tv 开头的链接, 不然不会写这么长.
 func (d *downloader) getBvid(url string) *downloader {
 	if d.Err != nil {
 		return d
@@ -47,10 +48,6 @@ func (d *downloader) getBvid(url string) *downloader {
 		}
 		data, err := SenderGetAllRaw(url)
 		if err != nil {
-			return d
-		}
-		if !strings.Contains(string(data), "www.bilibili.com/video/") {
-			d.Err = fmt.Errorf("无法从 %s 解析出 bvid", url)
 			return d
 		}
 		url = string(data)
@@ -66,11 +63,18 @@ func (d *downloader) getBvid(url string) *downloader {
 	slog.Debug(fmt.Sprintf("解析出来的 bv 号是 %s", bvid))
 	return d
 }
-func (d *downloader) getVideoInfo() *downloader {
+
+// 获取视频信息, 但是没有视频链接.
+func (d *downloader) getVideoInfoNoVideoUrl() *downloader {
 	if d.Err != nil {
 		return d
 	}
 	data, err := SenderGetAllRaw(GetVideoInfoApi(d.vi.bvid))
+	if s.veryVerbose {
+		if err := WriteRawDataToFile(path.Join(s.saveDir, d.vi.title+"_videoinfo.json"), data); err != nil {
+			slog.Warn(err.Error())
+		}
+	}
 	if err != nil {
 		d.Err = err
 		return d
@@ -85,26 +89,26 @@ func (d *downloader) getVideoInfo() *downloader {
 		slog.Debug(fmt.Sprintf("解析出来的封面下载链接是 %s", d.vi.picUrl))
 	} else {
 		d.Err = fmt.Errorf("无法从 %s 解析出 cid", d.vi.bvid)
+	}
+	return d
+}
+
+// 获取视频链接, 只能获取 720p.
+func (d *downloader) getVideoUrl() *downloader {
+	if d.Err != nil {
 		return d
 	}
-	data, err = SenderGetAllRaw(GetVideoUrlApi(d.vi.bvid, d.vi.cid))
+	data, err := SenderGetAllRaw(GetVideoUrlApi(d.vi.bvid, d.vi.cid))
+	if s.veryVerbose {
+		if err := WriteRawDataToFile(path.Join(s.saveDir, d.vi.title+"_videourl.json"), data); err != nil {
+			slog.Warn(err.Error())
+		}
+	}
 	if err != nil {
 		d.Err = err
 		return d
 	}
-	dataJson = gjson.ParseBytes(data)
-	if s.veryVerbose {
-		jsonFile, err := os.OpenFile(path.Join(s.saveDir, d.vi.title+".json"), os.O_RDWR|os.O_CREATE, 0666)
-		if err != nil {
-			d.Err = err
-			return d
-		}
-		_, err = jsonFile.Write(data)
-		if err != nil {
-			d.Err = err
-			return d
-		}
-	}
+	dataJson := gjson.ParseBytes(data)
 	if dataJson.Get("code").String() == "0" && dataJson.Get("data.durl.0.url").Exists() {
 		d.vi.vedioUrl = dataJson.Get("data.durl.0.url").String()
 		slog.Debug("解析出来的视频下载链接是" + d.vi.vedioUrl)
@@ -112,25 +116,34 @@ func (d *downloader) getVideoInfo() *downloader {
 		slog.Debug(fmt.Sprintf("解析出来的视频大小是 %.2f MB", float64(d.vi.size)/1048576))
 	} else {
 		d.Err = fmt.Errorf("无法从 %s 解析出视频下载链接", d.vi.bvid)
-		return d
 	}
 	return d
 }
+
+// 下载封面.
+func (d *downloader) downloadPic() *downloader {
+	if !s.savePic || d.Err != nil {
+		return d
+	}
+	_, err := WriteFileFromUrl(path.Join(s.saveDir, d.vi.title+".png"), d.vi.picUrl)
+	if err != nil {
+		d.Err = err
+		return d
+	}
+	slog.Info(fmt.Sprintf("%s 封面下载完成", d.vi.title))
+	return d
+}
+
+// 下载视频.
 func (d *downloader) downloadVedio() *downloader {
 	if s.noSaveVideo || d.Err != nil {
 		return d
 	}
-	reader, err := SenderGetReader(d.vi.vedioUrl)
+	reader, err := WriteFileFromUrl(path.Join(s.saveDir, d.vi.title+".mp4"), d.vi.vedioUrl)
 	if err != nil {
 		d.Err = err
 		return d
 	}
-	vedio, err := os.OpenFile(path.Join(s.saveDir, d.vi.title+".mp4"), os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		d.Err = err
-		return d
-	}
-	defer vedio.Close()
 	// bar := progressbar.DefaultBytes(
 	// 	d.size,
 	// 	"downloading",
@@ -149,46 +162,16 @@ func (d *downloader) downloadVedio() *downloader {
 			decor.Percentage(),
 		),
 	)
-
 	proxy := bar.ProxyReader(reader)
 	defer proxy.Close()
-
-	_, err = io.Copy(vedio, proxy)
-	if err != nil {
-		d.Err = err
-		return d
-	}
 	bar.SetTotal(d.vi.size, true) // 标记完成
 	slog.Info(fmt.Sprintf("%s 视频下载完成", d.vi.title))
-	return d
-}
-func (d *downloader) downloadPic() *downloader {
-	if !s.savePic || d.Err != nil {
-		return d
-	}
-	reader, err := SenderGetReader(d.vi.picUrl)
-	if err != nil {
-		d.Err = err
-		return d
-	}
-	pic, err := os.OpenFile(path.Join(s.saveDir, d.vi.title+".png"), os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		d.Err = err
-		return d
-	}
-	defer pic.Close()
-	_, err = io.Copy(pic, reader)
-	if err != nil {
-		d.Err = err
-		return d
-	}
-	slog.Info(fmt.Sprintf("%s 封面下载完成", d.vi.title))
 	return d
 }
 func (d *downloader) run(wg *sync.WaitGroup) {
 	for s.urls.Len() != 0 {
 		u := s.urls.PopFront()
-		d.getBvid(u).getVideoInfo().downloadVedio().downloadPic()
+		d.getBvid(u).getVideoInfoNoVideoUrl().getVideoUrl().downloadPic().downloadVedio()
 		if d.Err != nil {
 			slog.Warn(d.Err.Error())
 			s.fail.PushBack(u)

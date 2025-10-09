@@ -15,7 +15,7 @@ $ dbv -h
 使用方式:
     dbv.exe [选项] <链接>
 当前版本:
-    dbv-linux-x86-64-v0.3.0
+    dbv-v0.3.2
 选项:
     -f, --file             从指定的文件解析 BV 号，一行一个链接，行头是 # 时不解析
     -s, --saveDir          设置视频封面保存目录（默认程序运行的目录）
@@ -38,7 +38,7 @@ git clone --depth 1 http://docker.mydns.com:54671/Winter/DBV_Script.git
 cd DBV_Script
 go mod tidy
 # go env -w GOOS=linux
-go build -o ./dbv main.go
+go build -o ./dbv.o main.go
 # go env -w GOOS=windows
-# go build -o ./dbv main.go
+# go build -o ./dbv.exe main.go
 ```

@@ -12,7 +12,7 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-// Remove: \/:*?"<>|
+// 剔除非法字符: \/:*?"<>|
 func RemoveIllegalCharacters(title string) string {
 	if strings.ContainsAny(title, `\/:*?"<>|`) {
 		slog.Info("标题出现特殊字符，现将标题的特殊字符进行剔除，否则无法保存")
@@ -22,6 +22,8 @@ func RemoveIllegalCharacters(title string) string {
 	}
 	return title
 }
+
+// 从文件加载 url, 每行开头是 # 不加载.
 func LoadUrlFile(urlfile string, sd *safeDeque[string]) error {
 	file, err := os.Open(urlfile)
 	if err != nil {
@@ -37,6 +39,38 @@ func LoadUrlFile(urlfile string, sd *safeDeque[string]) error {
 	}
 	return nil
 }
+func WriteRawDataToFile(path string, data []byte) (err error) {
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	_, err = file.Write(data)
+	return
+}
+
+// ReadCloser 会在内部关闭
+func WriteDataToFileFromIO(path string, reader io.ReadCloser) (err error) {
+	defer reader.Close()
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	_, err = io.Copy(file, reader)
+	return
+}
+func WriteFileFromUrl(path, url string) (io.ReadCloser, error) {
+	reader, err := SenderGetReader(url)
+	if err != nil {
+		return nil, err
+	}
+	err = WriteDataToFileFromIO(path, reader)
+	if err != nil {
+		return nil, err
+	}
+	return reader, nil
+}
 
 var client *resty.Client
 
@@ -47,6 +81,9 @@ func createClient() {
 		client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0")
 		client.SetHeader("Accept-Encoding", "gzip, deflate, br, zstd")
 	}
+}
+func setClientDebug(b bool) {
+	client.SetDebug(b)
 }
 func SenderGetAllRaw(url string) ([]byte, error) {
 	createClient()

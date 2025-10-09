@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const version string = "dbv-v0.3.1"
+const version string = "dbv-v0.3.2"
 
 const helpMessage string = `
 {{- "介绍:" }}
@@ -137,6 +137,7 @@ func Parser() error {
 	if err == nil {
 		if s.veryVerbose {
 			slog.SetLogLoggerLevel(slog.LevelDebug)
+			setClientDebug(true)
 		} else if s.verbose {
 			slog.SetLogLoggerLevel(slog.LevelInfo)
 		} else {
