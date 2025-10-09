@@ -185,7 +185,7 @@ func Run() {
 		}()
 	}
 	wg.Wait()
-	progress.Wait()
+	WaitBarFinish()
 	slog.Info("全部下载完成")
 	if globalSettings.fail.Len() != 0 {
 		slog.Warn("以下是无法下载的链接")
