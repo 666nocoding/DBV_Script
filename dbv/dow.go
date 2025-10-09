@@ -9,8 +9,6 @@ import (
 	"sync"
 
 	"github.com/tidwall/gjson"
-	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 )
 
 type videoInfo struct {
@@ -23,14 +21,14 @@ type videoInfo struct {
 }
 
 type downloader struct {
-	progress *mpb.Progress
-	Err      error
-	vi       *videoInfo
+	Err error
+	se  *settings
+	vi  *videoInfo
 }
 
-func newDownloader(p *mpb.Progress) *downloader {
+func Newdownloader(se *settings) *downloader {
 	return &downloader{
-		progress: p,
+		se: se,
 	}
 }
 
@@ -70,11 +68,7 @@ func (d *downloader) getVideoInfoNoVideoUrl() *downloader {
 		return d
 	}
 	data, err := SenderGetAllRaw(GetVideoInfoApi(d.vi.bvid))
-	if s.veryVerbose {
-		if err := WriteRawDataToFile(path.Join(s.saveDir, d.vi.title+"_videoinfo.json"), data); err != nil {
-			slog.Warn(err.Error())
-		}
-	}
+	saveTitle := d.vi.bvid
 	if err != nil {
 		d.Err = err
 		return d
@@ -87,8 +81,14 @@ func (d *downloader) getVideoInfoNoVideoUrl() *downloader {
 		slog.Debug(fmt.Sprintf("解析出来的 cid 号是 %s", d.vi.cid))
 		slog.Debug(fmt.Sprintf("解析出来的标题是 %s", d.vi.title))
 		slog.Debug(fmt.Sprintf("解析出来的封面下载链接是 %s", d.vi.picUrl))
+		saveTitle = d.vi.title
 	} else {
 		d.Err = fmt.Errorf("无法从 %s 解析出 cid", d.vi.bvid)
+	}
+	if d.se.veryVerbose {
+		if err := WriteRawDataToFile(path.Join(d.se.saveDir, saveTitle+"_videoinfo.json"), data); err != nil {
+			slog.Warn(err.Error())
+		}
 	}
 	return d
 }
@@ -99,8 +99,8 @@ func (d *downloader) getVideoUrl() *downloader {
 		return d
 	}
 	data, err := SenderGetAllRaw(GetVideoUrlApi(d.vi.bvid, d.vi.cid))
-	if s.veryVerbose {
-		if err := WriteRawDataToFile(path.Join(s.saveDir, d.vi.title+"_videourl.json"), data); err != nil {
+	if d.se.veryVerbose {
+		if err := WriteRawDataToFile(path.Join(d.se.saveDir, d.vi.title+"_videourl.json"), data); err != nil {
 			slog.Warn(err.Error())
 		}
 	}
@@ -122,10 +122,10 @@ func (d *downloader) getVideoUrl() *downloader {
 
 // 下载封面.
 func (d *downloader) downloadPic() *downloader {
-	if !s.savePic || d.Err != nil {
+	if !d.se.savePic || d.Err != nil {
 		return d
 	}
-	_, err := WriteFileFromUrl(path.Join(s.saveDir, d.vi.title+".png"), d.vi.picUrl)
+	err := WriteFileFromUrl(path.Join(d.se.saveDir, d.vi.title+".png"), d.vi.picUrl)
 	if err != nil {
 		d.Err = err
 		return d
@@ -136,67 +136,61 @@ func (d *downloader) downloadPic() *downloader {
 
 // 下载视频.
 func (d *downloader) downloadVedio() *downloader {
-	if s.noSaveVideo || d.Err != nil {
+	if d.se.noSaveVideo || d.Err != nil {
 		return d
 	}
-	reader, err := WriteFileFromUrl(path.Join(s.saveDir, d.vi.title+".mp4"), d.vi.vedioUrl)
-	if err != nil {
-		d.Err = err
-		return d
+	if !d.se.nobar {
+		reader, err := SenderGetReader(d.vi.vedioUrl)
+		if err != nil {
+			d.Err = err
+			return d
+		}
+		defer reader.Close()
+		err = AddBarToWriteDataToFileFromIO(path.Join(d.se.saveDir, d.vi.title+".mp4"), reader, d.vi.size, d.vi.title)
+		if err != nil {
+			d.Err = err
+			return d
+		}
+	} else {
+		err := WriteFileFromUrl(path.Join(d.se.saveDir, d.vi.title+".mp4"), d.vi.vedioUrl)
+		if err != nil {
+			d.Err = err
+			return d
+		}
 	}
-	// bar := progressbar.DefaultBytes(
-	// 	d.size,
-	// 	"downloading",
-	// )
-	// _, err = io.Copy(io.MultiWriter(vedio, bar), reader)
-	// if err != nil {
-	// 	return err
-	// }
-	bar := d.progress.AddBar(
-		d.vi.size,
-		mpb.PrependDecorators(
-			decor.Name(fmt.Sprintf("%s ", d.vi.title)),
-		),
-		mpb.AppendDecorators(
-			decor.CountersKibiByte("% .2f / % .2f"),
-			decor.Percentage(),
-		),
-	)
-	proxy := bar.ProxyReader(reader)
-	defer proxy.Close()
-	bar.SetTotal(d.vi.size, true) // 标记完成
 	slog.Info(fmt.Sprintf("%s 视频下载完成", d.vi.title))
 	return d
 }
-func (d *downloader) run(wg *sync.WaitGroup) {
-	for s.urls.Len() != 0 {
-		u := s.urls.PopFront()
+func (d *downloader) run() {
+	for d.se.urls.Len() != 0 {
+		u := d.se.urls.PopFront()
 		d.getBvid(u).getVideoInfoNoVideoUrl().getVideoUrl().downloadPic().downloadVedio()
 		if d.Err != nil {
 			slog.Warn(d.Err.Error())
-			s.fail.PushBack(u)
+			d.se.fail.PushBack(u)
 			d.Err = nil
 		}
 	}
-	wg.Done()
 }
 func Run() {
-	if s.urls.Len() == 0 {
+	if globalSettings.urls.Len() == 0 {
 		return
 	}
-	p := mpb.New(mpb.WithWidth(64))
 	wg := sync.WaitGroup{}
-	wg.Add(s.maxgor)
-	for range s.maxgor {
-		go newDownloader(p).run(&wg)
+	wg.Add(globalSettings.maxgor)
+	for range globalSettings.maxgor {
+		go func() {
+			Newdownloader(globalSettings).run()
+			wg.Done()
+		}()
 	}
 	wg.Wait()
-	p.Wait()
+	progress.Wait()
 	slog.Info("全部下载完成")
-	if s.fail.Len() != 0 {
+	if globalSettings.fail.Len() != 0 {
 		slog.Warn("以下是无法下载的链接")
-		for s.fail.Len() != 0 {
-			fmt.Println(s.fail.PopFront())
+		for globalSettings.fail.Len() != 0 {
+			fmt.Println(globalSettings.fail.PopFront())
 		}
 	}
 }

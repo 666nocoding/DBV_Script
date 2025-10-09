@@ -1,6 +1,10 @@
 package dbv
 
-import "testing"
+import (
+	"bytes"
+	"os"
+	"testing"
+)
 
 func TestLoadUrlFile(t *testing.T) {
 	urlfile := "../test/urls.txt"
@@ -32,4 +36,68 @@ func TestLoadUrlFile(t *testing.T) {
 		t.Fatal("expect error, but error is nil.")
 	}
 	t.Log(err)
+}
+func TestWriteRawDataToFile(t *testing.T) {
+	bb := bytes.Buffer{}
+	bb.WriteString("sadjadjskadjkasdklakdjskldjklsajadqwewqeqweqwewqe")
+	path := "../test/TestWriteRawDataToFile.txt"
+	err := WriteRawDataToFile(path, bb.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestWriteDataToFileFromIO(t *testing.T) {
+	readpath := "../test/TestWriteRawDataToFile.txt"
+	writepath := "../test/TestWriteDataToFileFromIO_write"
+	file, err := os.OpenFile(readpath, os.O_RDONLY, 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = WriteDataToFileFromIO(writepath, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestSenderGetAllRaw(t *testing.T) {
+	url := "http://172.17.0.1:8080/1.py"
+	data, err := SenderGetAllRaw(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "../test/TestWriteRawDataToFile.txt"
+	err = WriteRawDataToFile(path, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestSenderGetReader(t *testing.T) {
+	url := "http://172.17.0.1:8080/1.py"
+	reader, err := SenderGetReader(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "../test/TestWriteRawDataToFile.txt"
+	err = WriteDataToFileFromIO(path, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestAddBarToWriteDataToFileFromIO(t *testing.T) {
+	url := "http://172.17.0.1:8080/1.py"
+	data, err := SenderGetAllRaw(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	size := int64(len(data))
+	reader, err := SenderGetReader(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "../test/TestWriteRawDataToFile.txt"
+	title := "1.py"
+	err = AddBarToWriteDataToFileFromIO(path, reader, size, title)
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress.Wait()
 }

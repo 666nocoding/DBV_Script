@@ -2,6 +2,7 @@ package dbv
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/gammazero/deque"
 	"github.com/go-resty/resty/v2"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 )
 
 // 剔除非法字符: \/:*?"<>|
@@ -40,7 +43,7 @@ func LoadUrlFile(urlfile string, sd *safeDeque[string]) error {
 	return nil
 }
 func WriteRawDataToFile(path string, data []byte) (err error) {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0666)
 	if err != nil {
 		return
 	}
@@ -49,10 +52,36 @@ func WriteRawDataToFile(path string, data []byte) (err error) {
 	return
 }
 
-// ReadCloser 会在内部关闭
-func WriteDataToFileFromIO(path string, reader io.ReadCloser) (err error) {
-	defer reader.Close()
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+var progress *mpb.Progress
+
+func createProgress() {
+	if progress == nil {
+		option := mpb.WithWidth(64)
+		progress = mpb.New(option)
+	}
+}
+func AddBarToWriteDataToFileFromIO(path string, reader io.Reader, size int64, title string) error {
+	createProgress()
+	bar := progress.AddBar(
+		size,
+		mpb.PrependDecorators(
+			decor.Name(fmt.Sprintf("%s ", title)),
+		),
+		mpb.AppendDecorators(
+			decor.CountersKibiByte("% .2f / % .2f"),
+			decor.Percentage(),
+		),
+	)
+	proxyreader := bar.ProxyReader(reader)
+	defer bar.SetTotal(size, true)
+	defer proxyreader.Close()
+	return WriteDataToFileFromIO(path, proxyreader)
+}
+func WaitBarFinish() {
+	progress.Wait()
+}
+func WriteDataToFileFromIO(path string, reader io.Reader) (err error) {
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0666)
 	if err != nil {
 		return
 	}
@@ -60,16 +89,16 @@ func WriteDataToFileFromIO(path string, reader io.ReadCloser) (err error) {
 	_, err = io.Copy(file, reader)
 	return
 }
-func WriteFileFromUrl(path, url string) (io.ReadCloser, error) {
+func WriteFileFromUrl(path, url string) error {
 	reader, err := SenderGetReader(url)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	err = WriteDataToFileFromIO(path, reader)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return reader, nil
+	return nil
 }
 
 var client *resty.Client
@@ -83,27 +112,30 @@ func createClient() {
 	}
 }
 func setClientDebug(b bool) {
+	createClient()
 	client.SetDebug(b)
 }
-func SenderGetAllRaw(url string) ([]byte, error) {
+func SenderGet(url string, parseResponse bool) (*resty.Response, error) {
 	createClient()
 	request := client.R()
-	respose, err := request.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	return respose.Body(), nil
+	request.SetDoNotParseResponse(!parseResponse)
+	return request.Get(url)
 }
-func SenderGetReader(url string) (io.ReadCloser, error) {
-	createClient()
-	request := client.R()
-	respose, err := request.
-		SetDoNotParseResponse(true).
-		Get(url)
+func SenderGetAllRaw(url string) ([]byte, error) {
+	resp, err := SenderGet(url, true)
 	if err != nil {
 		return nil, err
 	}
-	return respose.RawBody(), nil
+	return resp.Body(), nil
+}
+
+// 返回的 ReadCloser 一定要关闭, 不然会内存泄漏.
+func SenderGetReader(url string) (io.ReadCloser, error) {
+	resp, err := SenderGet(url, false)
+	if err != nil {
+		return nil, err
+	}
+	return resp.RawBody(), nil
 }
 
 type safeDeque[T any] struct {

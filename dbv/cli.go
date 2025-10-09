@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const version string = "dbv-v0.3.2"
+const version string = "dbv-v0.3.3"
 
 const helpMessage string = `
 {{- "介绍:" }}
@@ -25,7 +25,7 @@ const helpMessage string = `
 `
 
 var parser cli.Command = cli.Command{
-	Name:        "dbv.exe",
+	Name:        "dbv",
 	Description: "下载哔哩哔哩视频的命令行工具",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
@@ -64,8 +64,8 @@ var parser cli.Command = cli.Command{
 			Usage:   "是否保存视频（默认保存）",
 		},
 		&cli.BoolFlag{
-			Name:    "bar",
-			Aliases: []string{"b"},
+			Name:    "nobar",
+			Aliases: []string{"nb"},
 			Value:   true,
 			Usage:   "是否打开下载进度条（默认打开）",
 		},
@@ -88,38 +88,43 @@ type settings struct {
 	noSaveVideo bool
 	verbose     bool
 	veryVerbose bool
+	nobar       bool
 	maxgor      int
 	urls        *safeDeque[string]
 	fail        *safeDeque[string]
 }
 
-var s settings = settings{
-	urls: NewSafeDeque[string](),
-	fail: NewSafeDeque[string](),
-}
+var globalSettings *settings = NewSetting()
 
+func NewSetting() *settings {
+	return &settings{
+		urls: NewSafeDeque[string](),
+		fail: NewSafeDeque[string](),
+	}
+}
 func getArgs(ctx context.Context, cmd *cli.Command) error {
-	s.saveDir = cmd.String("saveDir")
-	s.verbose = cmd.Bool("verbose")
-	s.veryVerbose = cmd.Bool("Verbose")
-	s.savePic = cmd.Bool("savePic")
-	s.noSaveVideo = cmd.Bool("nosaveVideo")
-	s.maxgor = cmd.Int("maxgor")
+	globalSettings.saveDir = cmd.String("saveDir")
+	globalSettings.verbose = cmd.Bool("verbose")
+	globalSettings.veryVerbose = cmd.Bool("Verbose")
+	globalSettings.savePic = cmd.Bool("savePic")
+	globalSettings.noSaveVideo = cmd.Bool("nosaveVideo")
+	globalSettings.nobar = cmd.Bool("nobar")
+	globalSettings.maxgor = cmd.Int("maxgor")
 	for i := range cmd.Args().Len() {
-		s.urls.PushBack(cmd.Args().Get(i))
+		globalSettings.urls.PushBack(cmd.Args().Get(i))
 	}
 	if cmd.String("file") != "" {
-		if err := LoadUrlFile(cmd.String("file"), s.urls); err != nil {
+		if err := LoadUrlFile(cmd.String("file"), globalSettings.urls); err != nil {
 			return errors.New("无法打开 url 文件，请检查文件是否存在或者权限")
 		}
 	}
-	if _, err := os.Stat(s.saveDir); os.IsNotExist(err) {
+	if _, err := os.Stat(globalSettings.saveDir); os.IsNotExist(err) {
 		return errors.New("无法进入保存目录，请保存目录是否存在或者权限")
 	}
-	if s.urls.Len() <= 0 {
+	if globalSettings.urls.Len() <= 0 {
 		return errors.New("必须至少提供一个 url")
 	}
-	if s.maxgor <= 0 {
+	if globalSettings.maxgor <= 0 {
 		return errors.New("协程必须大于 0")
 	}
 	return nil
@@ -135,10 +140,10 @@ func Parser() error {
 	ctx := context.Background()
 	err := parser.Run(ctx, os.Args)
 	if err == nil {
-		if s.veryVerbose {
+		if globalSettings.veryVerbose {
 			slog.SetLogLoggerLevel(slog.LevelDebug)
 			setClientDebug(true)
-		} else if s.verbose {
+		} else if globalSettings.verbose {
 			slog.SetLogLoggerLevel(slog.LevelInfo)
 		} else {
 			slog.SetLogLoggerLevel(slog.LevelWarn)
