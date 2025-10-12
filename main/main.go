@@ -3,7 +3,7 @@ package main
 import (
 	"log/slog"
 
-	dbv "docker.mydns.com/Winter/DBV_Script"
+	dbv "DBV_Script"
 )
 
 func main() {

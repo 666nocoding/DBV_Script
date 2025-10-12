@@ -1,4 +1,4 @@
-module docker.mydns.com/Winter/DBV_Script
+module DBV_Script
 
 go 1.24.1
 
