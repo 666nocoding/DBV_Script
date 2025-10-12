@@ -1,5 +1,4 @@
 *.exe
 *.o
 release/*
-bilibili-API-collect/*
 test/*

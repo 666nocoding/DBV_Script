@@ -1,8 +1,9 @@
 package main
 
 import (
-	"DBV_Script/dbv"
 	"log/slog"
+
+	dbv "docker.mydns.com/Winter/DBV_Script"
 )
 
 func main() {
