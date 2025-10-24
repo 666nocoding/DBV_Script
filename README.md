@@ -34,7 +34,7 @@ $ dbv -h
 ## 构建方式
 
 ```shell
-git clone --depth 1 http://docker.mydns.com:54671/Winter/DBV_Script.git
+git clone --depth 1 https://github.com/666nocoding/DBV_Script.git
 cd DBV_Script
 go mod tidy
 # go env -w GOOS=linux
