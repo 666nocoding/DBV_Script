@@ -34,7 +34,7 @@ git clone --depth 1 https://github.com/666nocoding/DBV_Script.git
 cd DBV_Script
 go mod tidy
 # go env -w GOOS=linux
-go build -o ./dbv.o main.go
+go build -o ./dbv.o cmd/dbv/main.go
 # go env -w GOOS=windows
-# go build -o ./dbv.exe main.go
+# go build -o ./dbv.exe cmd/dbv/main.go
 ```
